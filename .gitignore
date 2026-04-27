@@ -30,3 +30,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local sandbox (manual e2e checks, scratch files)
+tests/
+scratch/
+/broker
