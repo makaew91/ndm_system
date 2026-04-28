@@ -1,6 +1,11 @@
 package main
 
 import (
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -71,4 +76,45 @@ func (b *broker) take(name string, timeout time.Duration) (string, bool) {
 	}
 }
 
-func main() {}
+func (b *broker) handle(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/")
+	if name == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		v := r.URL.Query().Get("v")
+		if v == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		b.put(name, v)
+	case http.MethodGet:
+		var d time.Duration
+		if t := r.URL.Query().Get("timeout"); t != "" {
+			n, err := strconv.Atoi(t)
+			if err != nil || n < 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			d = time.Duration(n) * time.Second
+		}
+		m, ok := b.take(name, d)
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write([]byte(m))
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		log.Fatal("usage: broker <port>")
+	}
+	b := &broker{qs: map[string]*queue{}}
+	log.Fatal(http.ListenAndServe(":"+os.Args[1], http.HandlerFunc(b.handle)))
+}
